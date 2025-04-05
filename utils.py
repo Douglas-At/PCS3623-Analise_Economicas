@@ -2,7 +2,7 @@ import plotly.graph_objs as go
 
 class PlotsHist:
 
-    def candlestick(self,df):
+    def candlestick(self,df, benchmark):
         ativo_selecionado = df.cod_negociacao.unique()[0]
         fig = go.Figure(data=[
             go.Candlestick(
@@ -14,6 +14,17 @@ class PlotsHist:
                 name=ativo_selecionado
             )
         ])
+        if not benchmark.empty:
+            #conferir o df
+            benchmark['valor'] = benchmark['valor'].add(1).cumprod()*df["preco_ultimo_negocio"].iloc[0]
+            fig.add_scatter(
+                x=benchmark['data'],
+                y=benchmark['valor'],
+                mode='lines',
+                name=benchmark.nome.unique()[0],
+                line=dict(color='black')
+
+            )
 
         fig.update_layout(
             title=f'Candlestick - {ativo_selecionado}',

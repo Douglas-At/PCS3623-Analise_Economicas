@@ -1,5 +1,5 @@
 import pandas as pd
-from dash import Dash, dcc, html, Input, Output, State
+from dash import Dash, dcc, html, Input, Output
 from datetime import datetime, timedelta
 from database import engine
 from utils import PlotsHist
@@ -9,10 +9,10 @@ app = Dash(__name__)
 
 # Lista de ativos
 lista_ticker = pd.read_sql("SELECT ticker FROM ativos a", engine).ticker.to_list()
+
 lista_benchmark = pd.read_sql("SELECT nome FROM indices i", engine).nome.to_list()
 
 
-# Layout da aplicação
 app.layout = html.Div([
     html.H2("Gráfico Histórico"),
     
@@ -24,6 +24,12 @@ app.layout = html.Div([
             style={'width': '200px'}
         ),
 
+        dcc.Dropdown(
+            id='dropdown-benchmark',
+            options=[{'label': nome, 'value': nome} for nome in lista_benchmark],
+            placeholder="ibov",
+            style={'width': '220px'}
+        ),
         dcc.RadioItems(
             id='periodo-opcao',
             options=[
@@ -53,7 +59,6 @@ app.layout = html.Div([
     dcc.Graph(id='grafico-candlestick')
 ])
 
-# Mostrar ou esconder os campos de data customizada
 @app.callback(
     Output('date-picker-container', 'style'),
     Input('periodo-opcao', 'value')
@@ -63,19 +68,17 @@ def mostrar_ocultar_datepicker(periodo_opcao):
         return {'display': 'flex', 'margin-top': '10px', 'gap': '10px'}
     return {'display': 'none'}
 
-# Callback para atualizar o gráfico
 @app.callback(
     Output('grafico-candlestick', 'figure'),
     Input('dropdown-ativo', 'value'),
+    Input('dropdown-benchmark', 'value'), 
     Input('periodo-opcao', 'value'),
     Input('data-inicial', 'date'),
     Input('data-final', 'date')
 )
-def atualizar_grafico(ativo_selecionado, periodo_opcao, data_inicial, data_final):
-    # Data final padrão = hoje
+def atualizar_grafico(ativo_selecionado, benchmark, periodo_opcao, data_inicial, data_final):
     hoje = datetime.today().date()
-
-    # Definir intervalo de datas com base na opção escolhida
+    
     if periodo_opcao == 'YTD':
         data_ini = datetime(hoje.year, 1, 1).date()
         data_fim = hoje
@@ -87,7 +90,7 @@ def atualizar_grafico(ativo_selecionado, periodo_opcao, data_inicial, data_final
         data_fim = hoje
     elif periodo_opcao == 'CUSTOM':
         if not data_inicial or not data_final:
-            return ph.candlestick(pd.DataFrame())  # Retorna gráfico vazio se datas inválidas
+            return ph.candlestick(pd.DataFrame())
         data_ini = pd.to_datetime(data_inicial).date()
         data_fim = pd.to_datetime(data_final).date()
 
@@ -103,8 +106,22 @@ def atualizar_grafico(ativo_selecionado, periodo_opcao, data_inicial, data_final
         ORDER BY bd.data_pregao ASC
     """
     df_ativo = pd.read_sql(query, engine)
-    fig = ph.candlestick(df_ativo)
 
+    df_benchmark = pd.DataFrame()
+    if benchmark:
+        data_fim = df_ativo["date_aux"].iloc[-1]
+        query = f"""
+            SELECT ih.data, ih.valor, i.nome
+            FROM indice_historico ih
+            JOIN indices i ON i.id = ih.indice_id
+            WHERE i.nome = '{benchmark}'
+            AND ih.data BETWEEN '{data_ini}' AND '{data_fim}'
+            ORDER BY ih.data ASC
+        """
+        df_benchmark = pd.read_sql(query, engine)
+    
+    
+    fig = ph.candlestick(df_ativo, benchmark=df_benchmark)
     return fig
 
 if __name__ == '__main__':
