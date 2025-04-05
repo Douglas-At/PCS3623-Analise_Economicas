@@ -33,4 +33,17 @@ class PlotsHist:
             xaxis_rangeslider_visible=False
         )
         return fig
+    
+    def linha_volatilidade(self, df):
+        if df.empty:
+            return go.Figure()
+
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=df['data_fim'], y=df['volatilidade'],  # ou o nome da coluna certa
+            mode='lines',
+            name='Volatilidade'
+        ))
+        fig.update_layout(title="Volatilidade Histórica Anualizada", xaxis_title="Data", yaxis_title="Volatilidade")
+        return fig
 

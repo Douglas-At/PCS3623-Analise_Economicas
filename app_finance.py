@@ -44,19 +44,13 @@ app.layout = html.Div([
         ),
 
         html.Div([
-            dcc.DatePickerSingle(
-                id='data-inicial',
-                placeholder='Data Inicial',
-                style={'margin-right': '10px'}
-            ),
-            dcc.DatePickerSingle(
-                id='data-final',
-                placeholder='Data Final'
-            ),
+            dcc.DatePickerSingle(id='data-inicial', placeholder='Data Inicial', style={'margin-right': '10px'}),
+            dcc.DatePickerSingle(id='data-final', placeholder='Data Final'),
         ], id='date-picker-container', style={'display': 'none', 'margin-top': '10px'})
     ], style={'display': 'flex', 'align-items': 'center', 'gap': '30px'}),
 
-    dcc.Graph(id='grafico-candlestick')
+    dcc.Graph(id='grafico-candlestick'),
+    dcc.Graph(id='grafico-volatilidade') #grafico vol 
 ])
 
 @app.callback(
@@ -70,6 +64,7 @@ def mostrar_ocultar_datepicker(periodo_opcao):
 
 @app.callback(
     Output('grafico-candlestick', 'figure'),
+    Output('grafico-volatilidade', 'figure'),
     Input('dropdown-ativo', 'value'),
     Input('dropdown-benchmark', 'value'), 
     Input('periodo-opcao', 'value'),
@@ -90,11 +85,11 @@ def atualizar_grafico(ativo_selecionado, benchmark, periodo_opcao, data_inicial,
         data_fim = hoje
     elif periodo_opcao == 'CUSTOM':
         if not data_inicial or not data_final:
-            return ph.candlestick(pd.DataFrame())
+            return ph.candlestick(pd.DataFrame()), ph.linha_volatilidade(pd.DataFrame())
         data_ini = pd.to_datetime(data_inicial).date()
         data_fim = pd.to_datetime(data_final).date()
-
-    query = f"""
+    #distinguir as querys pra n dar bo
+    query_ativo = f""" 
         SELECT 
             bd.data_pregao AS date_aux, a.ticker AS cod_negociacao, 
             bd.preco_abertura, bd.preco_maximo, bd.preco_minimo, 
@@ -105,12 +100,12 @@ def atualizar_grafico(ativo_selecionado, benchmark, periodo_opcao, data_inicial,
         AND bd.data_pregao BETWEEN '{data_ini}' AND '{data_fim}'
         ORDER BY bd.data_pregao ASC
     """
-    df_ativo = pd.read_sql(query, engine)
+    df_ativo = pd.read_sql(query_ativo, engine) 
 
     df_benchmark = pd.DataFrame()
-    if benchmark:
+    if benchmark and not df_ativo.empty:
         data_fim = df_ativo["date_aux"].iloc[-1]
-        query = f"""
+        query_benchmark = f"""
             SELECT ih.data, ih.valor, i.nome
             FROM indice_historico ih
             JOIN indices i ON i.id = ih.indice_id
@@ -118,11 +113,23 @@ def atualizar_grafico(ativo_selecionado, benchmark, periodo_opcao, data_inicial,
             AND ih.data BETWEEN '{data_ini}' AND '{data_fim}'
             ORDER BY ih.data ASC
         """
-        df_benchmark = pd.read_sql(query, engine)
-    
-    
-    fig = ph.candlestick(df_ativo, benchmark=df_benchmark)
-    return fig
+        df_benchmark = pd.read_sql(query_benchmark, engine)
+
+    # Volatilidade histórica
+    query_vol = f"""
+        SELECT vh.*
+        FROM volatilidade_historica vh
+        JOIN ativos a ON vh.ativo_id = a.id
+        WHERE a.ticker = '{ativo_selecionado}'
+        AND vh.data_fim BETWEEN '{data_ini}' AND '{data_fim}'
+        ORDER BY vh.data_inicio
+    """
+    df_vol = pd.read_sql(query_vol, engine)
+
+    fig_candle = ph.candlestick(df_ativo, benchmark=df_benchmark)
+    fig_vol = ph.linha_volatilidade(df_vol)
+
+    return fig_candle, fig_vol
 
 if __name__ == '__main__':
     app.run_server(debug=True)

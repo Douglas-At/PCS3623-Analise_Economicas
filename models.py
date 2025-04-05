@@ -62,3 +62,13 @@ class IndiceHistorico(Base):
     indice_id = Column(Integer, ForeignKey('indices.id'), nullable=False)
     indice = relationship("Indice", back_populates="historico")
 
+class VolatilidadeHistorica(Base):
+    __tablename__ = 'volatilidade_historica'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    ativo_id = Column(Integer, ForeignKey('ativos.id'), nullable=False)
+    data_inicio = Column(DateTime, nullable=False)
+    data_fim = Column(DateTime, nullable=False)
+    volatilidade = Column(Float, nullable=False)
+
+    ativo = relationship("Ativo", backref="volatilidade_historica")
